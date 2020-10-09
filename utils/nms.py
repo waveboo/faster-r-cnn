@@ -33,7 +33,9 @@ def nms(boxes, scores, threshold):
 
         ious = iou_calcu(cur_box, res_box).view(-1)
 
-        inds = torch.nonzero(ious < threshold).squeeze()
+        # inds = torch.nonzero(ious < threshold).squeeze()
+
+        inds = torch.where(ious < threshold)[0]
 
         # +1 because the 0th is the current box
         score_sort_index = score_sort_index[inds + 1].view(-1)

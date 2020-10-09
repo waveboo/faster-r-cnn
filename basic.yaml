@@ -1,9 +1,10 @@
 DATASET:
   NAME: 'VOC2012'
-  ROOT_PATH: '/Users/SweetBelle/Documents/datasets/VOCdevkit/VOC2012'
+  ROOT_PATH: '/home/lb/datasets/VOCdevkit/VOC2012Debug'
   TARGET_SIZE: 600
   MAX_SIZE: 1000
   HORIZONTAL_FLIP: True
+  USE_HARD_EXAM: False
   PIXEL_MEAN: [0.485, 0.456, 0.406]
   PIXEL_STD: [0.229, 0.224, 0.225]
   CLASSES: ('__background__',  'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor')
@@ -11,12 +12,13 @@ DATASET:
 MODEL:
   BACKBONE: 'resnet50'
   N_FEATURES: 1024
+  POOLING_SIZE: 7
   PRE_TRAIN: True
 
 SOLVER:
   OPTIMIZER: "SGD"
   START_EPOCH: 0
-  END_EPOCH: 10
+  END_EPOCH: 100
   BASE_LR: 1e-3
   WEIGHT_DECAY: 1e-4
 
@@ -24,11 +26,12 @@ DATALOADER:
   BATCH_SIZE: 1
   NUM_WORKERS: 1
 
+ANCHORS:
+  STRIDE: 16
+  SCALE: [8, 16, 32]
+  ASPECT: [0.5, 1, 2]
+
 TRAIN:
-  ANCHORS:
-    STRIDE: 16
-    SCALE: [8, 16, 32]
-    ASPECT: [0.5, 1, 2]
   RPN:
     MIN_SIZE: 16
     PROPOSAL_PRE_NMS: 12000
@@ -40,7 +43,17 @@ TRAIN:
     ANCHORS_POS_PER_IMG: 128
     CLS_WEIGHT_DETLA: 1.0
     REG_WEIGHT_DETLA: 1.0
-  LAMBDA: 10
+    LAMBDA: 1
+  FAST_RCNN:
+    ROIS_PER_IMG: 64
+    POS_FRACTION: 0.25
+    POS_ROI_TH: 0.5
+    NEG_ROI_TH: 0.1
+    REG_WEIGHT_DETLA: 1.0
+    BBOX_NORMALIZE_TARGETS: True
+    BBOX_NORMALIZE_MEANS: (0.0, 0.0, 0.0, 0.0)
+    BBOX_NORMALIZE_STDS: (0.1, 0.1, 0.2, 0.2)
+    LAMBDA: 1
 
 EVAL: False
 

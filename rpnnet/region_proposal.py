@@ -28,11 +28,15 @@ from utils.boxes import xyxy_to_xywh, xywh_to_xyxy, regformat_to_gtformat, clip_
 
 
 def get_region_proposal(rpn_cls_pred, rpn_box_reg, im_info, feature_info, anchor_info, cfg):
+    # define the device
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
     # generate all anchors over the grid
     im_height, im_width = im_info
     H, W = feature_info
     A, stride, aspect, scale = anchor_info
     anchor_boxs = all_anchor_generator(feature_info, anchor_info)
+    anchor_boxs = anchor_boxs.to(device)
 
     # apply delta to anchors to generate boxes (proposals)
     anchor_boxs = torch.reshape(anchor_boxs, (H * W * A, 4))
@@ -54,9 +58,10 @@ def get_region_proposal(rpn_cls_pred, rpn_box_reg, im_info, feature_info, anchor
 
     # take top pre_nms_topN (objectiveness score) proposals before NMS
     # idx 0 is background, idx 1 is foreground
-    _, pred_idx = torch.sort(rpn_cls_pred, dim=0, descending=True)
+    pred, pred_idx = torch.sort(rpn_cls_pred, dim=0, descending=True)
 
     pred_keep = pred_idx[:cfg['PROPOSAL_PRE_NMS'], 1]
+
     proposals_keep = proposals[pred_keep, :]
     cls_pred_keep = rpn_cls_pred[pred_keep, 1]
 
@@ -68,7 +73,10 @@ def get_region_proposal(rpn_cls_pred, rpn_box_reg, im_info, feature_info, anchor
     final_proposal = nms_proposal[:cfg['PROPOSAL_POST_NMS'], :]
 
     # return those top proposals
-    return final_proposal
+    rois = final_proposal.new_zeros((final_proposal.size(0), 5))
+    rois[:, 1:] = final_proposal
+    return rois
+    # return final_proposal
 
 
 if __name__ == '__main__':

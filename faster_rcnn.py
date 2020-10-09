@@ -1,14 +1,18 @@
 import torch
 import torch.nn as nn
-from backbone.resnet import resnet18, resnet34, resnet50, resnet101, resnet152
+import torch.nn.functional as F
 from rpnnet.rpn import RPN
-from data import FRDataLoader
+from rpnnet.target_propoasl import get_region_proposal
 import backbone as models
-# from configs import backbone
+# from roi_pooling.modules.roi_pool import _RoIPooling
+from torchvision.ops import RoIPool
 
 from utils.visualization import plot_bndbox
 import torchvision.transforms as transforms
 import matplotlib.pyplot as plt
+from utils.boxes import xyxy_to_xywh, xywh_to_xyxy, regformat_to_gtformat, clip_img_boundary
+from utils.nms import nms
+import numpy as np
 
 
 def normal_init(m, mean, stddev, truncated=False):
@@ -34,7 +38,16 @@ class FASTER_RCNN(nn.Module):
         self.backbone = nn.Sequential(base_model.conv1, base_model.bn1, base_model.relu, base_model.maxpool,
                                       base_model.layer1, base_model.layer2, base_model.layer3)
 
+        self.classifier = nn.Sequential(base_model.layer4, base_model.avgpool)
+
         self.rpn = RPN(cfg)
+
+        self.roi_pooling = RoIPool((cfg['MODEL']['POOLING_SIZE'], cfg['MODEL']['POOLING_SIZE']),
+                                   1/cfg['ANCHORS']['STRIDE'])
+
+        self.class_nums = len(cfg['DATASET']['CLASSES'])
+        self.rcnn_cls_layer = nn.Linear(2*cfg['MODEL']['N_FEATURES'], self.class_nums)
+        self.rcnn_reg_layer = nn.Linear(2*cfg['MODEL']['N_FEATURES'], self.class_nums*4)
 
         # Fix blocks
         for p in self.backbone[0].parameters(): p.requires_grad = False
@@ -47,7 +60,7 @@ class FASTER_RCNN(nn.Module):
                 for p in m.parameters(): p.requires_grad = False
 
         self.backbone.apply(set_bn_fix)
-        # self.classifier.apply(set_bn_fix)
+        self.classifier.apply(set_bn_fix)
 
         # initial weights
         normal_init(self.rpn.rpn_feat_layer, 0, 0.01, False)
@@ -58,6 +71,53 @@ class FASTER_RCNN(nn.Module):
         batch_size, channels, h, w = input.shape
         assert batch_size == 1, 'Only support batch_size = 1'
         x = self.backbone(input)
-        cls_loss, reg_loss, rois = self.rpn(x, gt_box, (h, w))
-        return cls_loss, reg_loss, rois
+        rpn_cls_loss, rpn_reg_loss, rpn_rois = self.rpn(x, gt_box, (h, w))
+
+        key = 'TRAIN' if self.training else 'TEST'
+        rcnn_cfg = self.cfg[key]['FAST_RCNN']
+
+        rcnn_labels, rcnn_boxes, rcnn_weights, rcnn_boxes_weight, rcnn_rois = get_region_proposal(rpn_rois, gt_box,
+                                                                                                  gt_cls,
+                                                                                                  self.class_nums,
+                                                                                                  rcnn_cfg)
+
+        # pos = torch.where(rcnn_labels)[0]
+        # img = transforms.ToPILImage()(input[0].cpu())
+        # show_pos = rcnn_rois[pos]
+        # plot_bndbox(img, show_pos[:, 1:].cpu())
+
+        x = self.roi_pooling(x, rcnn_rois)
+        x = self.classifier(x).mean(3).mean(2)
+
+        rcnn_cls_score = self.rcnn_cls_layer(x)
+        rcnn_cls_loss = F.cross_entropy(rcnn_cls_score, rcnn_labels.squeeze(-1).long())
+
+        rcnn_reg_score = self.rcnn_reg_layer(x)
+        pos_nums = torch.where(rcnn_weights)[0].shape[0]
+        rcnn_reg_loss = torch.sum(rcnn_boxes_weight *
+                                  F.smooth_l1_loss(rcnn_reg_score, rcnn_boxes, reduction='none'), dim=1)
+        rcnn_reg_loss = torch.sum(rcnn_reg_loss) / pos_nums
+
+        # test code
+        rcnn_cls_prob = F.softmax(rcnn_cls_score, dim=1)
+        _, cls_idx = torch.max(rcnn_cls_prob, dim=1)
+        fore = torch.where(cls_idx)[0]
+        titles = np.array(self.cfg['DATASET']['CLASSES'])[cls_idx[fore].cpu()]
+        fore_roi = rcnn_rois[fore][:, 1:]
+        fore_reg = torch.zeros((fore.shape[0], 4)).cuda()
+        for i in range(fore.shape[0]):
+            start = cls_idx[fore[i]] * 4
+            end = start + 4
+            fore_reg[i] = rcnn_reg_score[fore[i]][start:end]
+        bbox_normalize_means = torch.FloatTensor(self.cfg['TRAIN']['FAST_RCNN']['BBOX_NORMALIZE_MEANS']).type_as(fore_reg)
+        bbox_normalize_stds = torch.FloatTensor(self.cfg['TRAIN']['FAST_RCNN']['BBOX_NORMALIZE_STDS']).type_as(fore_reg)
+        fore_reg = fore_reg * bbox_normalize_stds.view(1, 4) + bbox_normalize_means.view(1, 4)
+        bndbox = xywh_to_xyxy(regformat_to_gtformat(fore_reg, xyxy_to_xywh(fore_roi)))
+        bndbox = clip_img_boundary(bndbox, w, h)
+        img = transforms.ToPILImage()(input[0].cpu())
+        plot_bndbox(img, bndbox.cpu(), titles)
+
+        # For train RPN:
+        # return rpn_cls_loss, rpn_reg_loss, rpn_rois
+        return rpn_cls_loss, rpn_reg_loss, rpn_rois, rcnn_cls_loss, rcnn_reg_loss, rcnn_cls_prob, rcnn_rois
 

@@ -7,8 +7,6 @@ def iou_calcu(rect1, rect2):
     # return iou is the intersection over union (IoU) between
     #                       rect1 and rect2 is shape N1 * N2
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
     N1 = rect1.shape[0]
     N2 = rect2.shape[0]
 
@@ -24,8 +22,8 @@ def iou_calcu(rect1, rect2):
     inter_h = y_inter_maxmin - y_inter_minmax
 
     # compare with the zero tensor(the 2nd param must be tensor! otherwise it will represent the dim)
-    inter_w = torch.max(inter_w, torch.Tensor([0]).to(device))
-    inter_h = torch.max(inter_h, torch.Tensor([0]).to(device))
+    inter_w = torch.max(inter_w, torch.Tensor([0]).to(inter_w))
+    inter_h = torch.max(inter_h, torch.Tensor([0]).to(inter_h))
 
     inter = inter_w * inter_h
 

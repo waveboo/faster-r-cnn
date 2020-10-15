@@ -38,6 +38,11 @@ def get_region_proposal(rois, gt_box, gt_cls, cls_nums, cfg):
     #     # define positive and negative rois
     #     # sample positive and negative rois if there are too many
     pos_roi_ids = torch.where(roi_max >= cfg['POS_ROI_TH'])[0]
+
+    # show_pos = all_boxes[pos_roi_ids][:, 1:]
+    # img = transforms.ToPILImage()(img[0].cpu())
+    # plot_bndbox(img, show_pos.cpu())
+
     neg_roi_ids = torch.where((cfg['POS_ROI_TH'] > roi_max) & (roi_max >= cfg['NEG_ROI_TH']))[0]
 
     # img = transforms.ToPILImage()(img[0].cpu())

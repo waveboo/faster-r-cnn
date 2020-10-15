@@ -1,10 +1,15 @@
 DATASET:
-  NAME: 'VOC2012'
-  ROOT_PATH: '/home/lb/datasets/VOCdevkit/VOC2012Debug'
+  TRAIN:
+    ROOT_PATH: ('/home/lb/datasets/VOCdevkit/VOC2007', '/home/lb/datasets/VOCdevkit/VOC2012', )
+    SPLIT_TYPE: ('trainval', 'trainval', )
+    HORIZONTAL_FLIP: True
+    USE_HARD_EXAM: False
+  TEST:
+    ROOT_PATH: ('/home/lb/datasets/VOCdevkit/VOC2007', )
+    SPLIT_TYPE: ('test', )
+    USE_07_METRIC: True
   TARGET_SIZE: 600
   MAX_SIZE: 1000
-  HORIZONTAL_FLIP: True
-  USE_HARD_EXAM: False
   PIXEL_MEAN: [0.485, 0.456, 0.406]
   PIXEL_STD: [0.229, 0.224, 0.225]
   CLASSES: ('__background__',  'aeroplane', 'bicycle', 'bird', 'boat', 'bottle', 'bus', 'car', 'cat', 'chair', 'cow', 'diningtable', 'dog', 'horse', 'motorbike', 'person', 'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor')
@@ -18,13 +23,19 @@ MODEL:
 SOLVER:
   OPTIMIZER: "SGD"
   START_EPOCH: 0
-  END_EPOCH: 100
+  END_EPOCH: 10
   BASE_LR: 1e-3
-  WEIGHT_DECAY: 1e-4
+  WEIGHT_DECAY: 0.0005
+  MOMENTUM: 0.9
+  LR_SCHEDULER_NAME: "MultiStepLR"
+  GAMMA: 0.1
+  STEPS: [6, 8]
+  DOUBLE_BIAS: True
+  BIAS_DECAY: False
 
 DATALOADER:
   BATCH_SIZE: 1
-  NUM_WORKERS: 1
+  NUM_WORKERS: 0
 
 ANCHORS:
   STRIDE: 16
@@ -45,7 +56,7 @@ TRAIN:
     REG_WEIGHT_DETLA: 1.0
     LAMBDA: 1
   FAST_RCNN:
-    ROIS_PER_IMG: 64
+    ROIS_PER_IMG: 128
     POS_FRACTION: 0.25
     POS_ROI_TH: 0.5
     NEG_ROI_TH: 0.1
@@ -55,8 +66,20 @@ TRAIN:
     BBOX_NORMALIZE_STDS: (0.1, 0.1, 0.2, 0.2)
     LAMBDA: 1
 
+TEST:
+  RPN:
+    MIN_SIZE: 16
+    PROPOSAL_PRE_NMS: 6000
+    PROPOSAL_POST_NMS: 300
+    NMS_TH: 0.7
+  FAST_RCNN:
+    NMS_TH: 0.3
+    PROB_TH: 0.0
+    MAX_BOX_NUM: 100
+
 EVAL: False
 
 RESULT:
+  LOG_ITER: 150
   SAVE_PATH: 'results'
   LOGGER: 'training.log'

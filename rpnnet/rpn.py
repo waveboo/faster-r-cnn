@@ -34,14 +34,15 @@ class RPN(nn.Module):
         x = self.rpn_feat_layer(input)
         x = self.relu(x)
         rpn_cls_score = self.rpn_cls_layer(x)
-        batch_size, _, h, w = rpn_cls_score.shape
-        rpn_cls_score_tmp = torch.reshape(rpn_cls_score, (batch_size, self.n_anchors, 2, h, w))
-        rpn_cls_pred = F.softmax(rpn_cls_score_tmp, dim=2)
-        rpn_cls_pred = torch.reshape(rpn_cls_pred, (batch_size, self.n_anchors*2, h, w))
-        rpn_cls_pred = rpn_cls_pred.permute(0, 2, 3, 1)
+        rpn_cls_score = rpn_cls_score.permute(0, 2, 3, 1)
 
         rpn_reg_score = self.rpn_reg_layer(x)
         rpn_reg_score = rpn_reg_score.permute(0, 2, 3, 1)
+
+        batch_size, h, w, _ = rpn_cls_score.shape
+        rpn_cls_score_tmp = rpn_cls_score.view(batch_size, h, w, self.n_anchors, 2)
+        rpn_cls_pred = F.softmax(rpn_cls_score_tmp, dim=-1)
+        rpn_cls_pred = rpn_cls_pred.view(batch_size, h, w, self.n_anchors*2)
 
         key = 'TRAIN' if self.training else 'TEST'
         rpn_cfg = self.cfg[key]['RPN']
@@ -59,7 +60,6 @@ class RPN(nn.Module):
             cls_weights = cls_weights.squeeze(-1)
             reg_weights = reg_weights.squeeze(-1)
 
-            rpn_cls_score = rpn_cls_score.permute(0, 2, 3, 1)
             rpn_cls_score = torch.reshape(rpn_cls_score, (batch_size * h * w * self.n_anchors, 2))
             rpn_reg_score = torch.reshape(rpn_reg_score, (batch_size * h * w * self.n_anchors, 4))
 

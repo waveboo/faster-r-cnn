@@ -3,7 +3,7 @@ import torch
 # from configs import scale, aspect
 
 
-# Ross is
+# Ross's is
 #    anchors =
 #
 #       -83   -39   100    56
